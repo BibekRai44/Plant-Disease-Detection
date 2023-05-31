@@ -9,6 +9,11 @@ checkpoint = torch.load(model_path, map_location=torch.device('cpu'))
 
 print(checkpoint.keys())
 
+disease_solutions = {
+    'Tomato___Late_blight': 'Apply fungicide and remove infected leaves.',
+    'Tomato___Early_blight': 'Prune affected leaves and apply copper-based fungicide.',
+    'Tomato___Septoria_leaf_spot': 'Remove infected leaves and apply fungicide.'}
+
 model_key = model_path
 
 model = checkpoint[model_key]
