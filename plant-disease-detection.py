@@ -1,56 +1,71 @@
 import streamlit as st
-import torch
 from PIL import Image
-import torchvision.transforms as transforms
+import io
+import numpy as np
+import tensorflow as tf
+import pickle
+from utils import clean_image, get_prediction, make_results
 
+# Load the Trained Model
+def load_model(path):
+    with open(path, 'rb') as f:
+        model = pickle.load(f)
+    return model
 
-model_path = 'plant-disease-model.pth'
-checkpoint = torch.load(model_path, map_location=torch.device('cpu'))
+# Removing Menu
+hide_streamlit_style = """
+            <style>
+            #MainMenu {visibility: hidden;}
+            footer {visibility: hidden;}
+            </style>
+            """
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-print(checkpoint.keys())
+# Check if the model is already trained and saved
+model_path = 'plant-disease-model.pkl'
+model_exists = st.sidebar.checkbox('Load Pretrained Model', value=False)
 
-disease_solutions = {
-    'Tomato___Late_blight': 'Apply fungicide and remove infected leaves.',
-    'Tomato___Early_blight': 'Prune affected leaves and apply copper-based fungicide.',
-    'Tomato___Septoria_leaf_spot': 'Remove infected leaves and apply fungicide.'}
+# Load the Model
+if model_exists:
+    model = load_model(model_path)
+else:
+    model = None
 
-model_key = model_path
+# Title and Description
+st.title('Plant Disease Detection')
+st.write("Just upload an image of your plant's leaf.")
 
-model = checkpoint[model_key]
-model.eval()
+# Setting the files that can be uploaded
+uploaded_file = st.file_uploader("Choose an image file", type=["png", "jpg"])
 
-transform = transforms.Compose([
-    transforms.Resize((224, 224)),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-])
+# If there is an uploaded file, start making predictions
+if uploaded_file is not None:
+    # Display progress and text
+    progress = st.text("Detecting Image")
+    my_bar = st.progress(0)
+    i = 0
 
+    # Reading the uploaded image
+    image = Image.open(io.BytesIO(uploaded_file.read()))
+    st.image(np.array(Image.fromarray(
+        np.array(image)).resize((700, 400), Image.ANTIALIAS)), width=None)
+    my_bar.progress(i + 40)
 
-classes = ['class1', 'class2', 'class3', ...]
+    # Cleaning the image
+    image = clean_image(image)
 
-def predict_disease(image):
-   
-    image = transform(image).unsqueeze(0)
+    # Making the predictions if model is loaded
+    if model is not None:
+        predictions, predictions_arr = get_prediction(model, image)
+        my_bar.progress(i + 30)
 
-  
-    with torch.no_grad():
-        output = model(image)
-        _, predicted_idx = torch.max(output, 1)
-        predicted_label = classes[predicted_idx.item()]
+        # Making the results
+        result = make_results(predictions, predictions_arr)
 
-    return predicted_label
+        # Removing progress bar and text after prediction is done
+        my_bar.progress(i + 30)
+        progress.empty()
+        i = 0
 
-def main():
-    st.title("Leaf Disease Prediction")
-
-    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
-
-    if uploaded_file is not None:
-        image = Image.open(uploaded_file)
-        st.image(image, caption="Uploaded Image", use_column_width=True)
-
-        predicted_disease = predict_disease(image)
-        st.write("Predicted Disease:", predicted_disease)
-
-if __name__ == "__main__":
-    main()
+        # Show the results
+        st.write(f"The plant {result['status']} with {result['prediction']} prediction.")
